@@ -38,9 +38,9 @@ public class LoanDataPersistence {
 
     public void saveLoan(UUID playerId, Loan loan) {
         // Store individual loan data
-        loansConfig.set(playerId + ".amountOwed", loan.getAmountOwed());
-        loansConfig.set(playerId + ".amountPaid", loan.getAmountPaid());
-        loansConfig.set(playerId + ".dateTaken", loan.getDateTaken().toString());
+        loansConfig.set(playerId.toString() + ".amountOwed", loan.getAmountOwed());
+        loansConfig.set(playerId.toString() + ".amountPaid", loan.getAmountPaid());
+        loansConfig.set(playerId.toString() + ".dateTaken", loan.getDateTaken().toString());
         try {
             loansConfig.save(loansFile);
         } catch (IOException e) {
@@ -51,14 +51,27 @@ public class LoanDataPersistence {
     public Map<UUID, Loan> loadLoans() {
         Map<UUID, Loan> loadedLoans = new HashMap<>();
         for (String key : loansConfig.getKeys(false)) {
-            UUID playerId = UUID.fromString(key);
-            double amountOwed = loansConfig.getDouble(key + ".amountOwed");
-            double amountPaid = loansConfig.getDouble(key + ".amountPaid");
-            String dateTaken = loansConfig.getString(key + ".dateTaken");
+            if (!key.equals("loans")) continue; // Skip if it's not under the "loans" section
+            for (String playerKey : loansConfig.getConfigurationSection(key).getKeys(false)) {
+                UUID playerId = UUID.fromString(playerKey);
+                double amountOwed = loansConfig.getDouble(key + "." + playerKey + ".amountOwed");
+                double amountPaid = loansConfig.getDouble(key + "." + playerKey + ".amountPaid");
+                String dateTaken = loansConfig.getString(key + "." + playerKey + ".dateTaken");
 
-            Loan loan = new Loan(amountOwed, amountPaid, dateTaken);
-            loadedLoans.put(playerId, loan);
+                Loan loan = new Loan(amountOwed, amountPaid, dateTaken);
+                loadedLoans.put(playerId, loan);
+            }
         }
         return loadedLoans;
+    }
+
+    public void removeLoan(UUID playerId) {
+        // Remove the loan data associated with the player's UUID
+        loansConfig.set(playerId.toString(), null); // This effectively removes the key and its values
+        try {
+            loansConfig.save(loansFile); // Save the changed configuration back to "loans.yml"
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

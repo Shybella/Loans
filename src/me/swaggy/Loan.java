@@ -30,16 +30,20 @@ public class Loan {
         return amountOwed;
     }
 
+    public void setAmountOwed(double amountOwed) {
+        this.amountOwed = amountOwed;
+    }
+
     public double getAmountPaid() {
         return amountPaid;
     }
 
-    public Date getDateTaken() {
-        return dateTaken;
+    public void setAmountPaid(double amountPaid) {
+        this.amountPaid = amountPaid;
     }
 
-    public void setAmountOwed(double amountOwed) {
-        this.amountOwed = amountOwed;
+    public Date getDateTaken() {
+        return dateTaken;
     }
 
     // Additional methods for managing loan data may be implemented here

@@ -33,7 +33,7 @@ public class Main extends JavaPlugin {
 
         if (incomeMonitorTask == null || incomeMonitorTask.isCancelled()) {
             IncomeMonitor monitor = new IncomeMonitor(this, loanManager);
-            incomeMonitorTask = monitor.runTaskTimer(this, 20L, 20L * 5); // Adjust timing as needed
+            incomeMonitorTask = monitor.runTaskTimer(this, 20L, 20L * 30); // Adjust timing as needed
         }
         getLogger().info("LoanPlugin has been enabled");
     }

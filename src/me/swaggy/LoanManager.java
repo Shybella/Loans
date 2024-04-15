@@ -1,7 +1,10 @@
 package me.swaggy;
 
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import net.milkbowl.vault.economy.Economy;
+import org.bukkit.plugin.java.JavaPlugin;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -9,13 +12,16 @@ import java.util.UUID;
 public class LoanManager {
 
     private Map<UUID, Loan> activeLoans = new HashMap<>();
+    //private Map<UUID, Boolean> recentLoanTransactions = new HashMap<>();
     private LoanDataPersistence loanDataPersistence;
     private Economy economy; // Assuming this is the Vault economy instance
     private final double loanFeePercentage = 5.0;
+    private JavaPlugin plugin;
 
     public LoanManager(LoanDataPersistence loanDataPersistence, Economy economy) {
         this.loanDataPersistence = loanDataPersistence;
         this.economy = economy;
+        this.plugin = plugin;
         // Optionally load active loans from data persistence
         this.activeLoans = loanDataPersistence.loadLoans();
     }
@@ -48,39 +54,49 @@ public class LoanManager {
     }
 
     public void repayLoan(Player player, double amount) {
-        Loan loan = activeLoans.get(player.getUniqueId());
+        UUID playerId = player.getUniqueId();
+        Loan loan = activeLoans.get(playerId);
+
         if (loan == null) {
             player.sendMessage("You do not have an active loan.");
             return;
         }
 
-        double remaining = loan.repay(amount); // Repay amount and return remaining balance
-        economy.withdrawPlayer(player, amount); // Deduct the paid amount from player's account
-        if (remaining <= 0) {
-            activeLoans.remove(player.getUniqueId()); // Loan fully repaid, remove from active loans
-            player.sendMessage("Loan fully repaid!");
+        loan.setAmountOwed(loan.getAmountOwed() - amount); // Deduct the amount from owed
+        loan.setAmountPaid(loan.getAmountPaid() + amount); // Update the total amount paid
+
+        if (loan.getAmountOwed() <= 0) {
+            // If the loan is fully repaid or overpaid
+            activeLoans.remove(playerId);
+            economy.withdrawPlayer(player, amount);
+            loanDataPersistence.removeLoan(playerId);
+            player.sendMessage("Congratulations! Your loan has been fully repaid.");
         } else {
-            player.sendMessage(String.format("Paid %.2f towards loan. Amount remaining: %.2f", amount, remaining));
+            loanDataPersistence.saveLoan(playerId, loan); // Save the updated loan information
+            economy.withdrawPlayer(player, amount);
+            player.sendMessage(String.format("Thank you. You've repaid %.2f. Your remaining loan balance is %.2f.", amount, loan.getAmountOwed()));
         }
-
-        loanDataPersistence.saveLoan(player.getUniqueId(), loan); // Update loan data persistence
     }
-
     public void applyIncomeDeduction(Player player, double deduction) {
         Loan loan = activeLoans.get(player.getUniqueId());
-        if (loan != null) {
-            double newAmountOwed = loan.getAmountOwed() - deduction;
-            if (newAmountOwed < 0) {
-                // If overpaid, consider the loan fully repaid and remove it
-                activeLoans.remove(player.getUniqueId());
-            } else {
-                loan.setAmountOwed(newAmountOwed);
-                // Optionally, update the loan with the deduction
-                loanDataPersistence.saveLoan(player.getUniqueId(), loan);
-            }
 
-            // Send a message to the player regarding the deduction
-            player.sendMessage(String.format("A total of %.2f has been deducted from your balance towards loan repayment.", deduction));
+//        if (recentLoanTransactions.containsKey(player.getUniqueId())) {
+//            return; // Skip deduction this time
+//        }
+
+        if (loan != null) {
+            loan.setAmountOwed(loan.getAmountOwed() - deduction); // Apply deduction
+            loan.setAmountPaid(loan.getAmountPaid() + deduction); // Update amount paid
+
+            if (loan.getAmountOwed() <= 0) {
+                // If overpaid or exactly fully repaid
+                activeLoans.remove(player.getUniqueId());
+                loanDataPersistence.removeLoan(player.getUniqueId());
+                player.sendMessage("Congratulations! Your loan has been fully repaid.");
+            } else {
+                loanDataPersistence.saveLoan(player.getUniqueId(), loan); // Persist updates
+                player.sendMessage(String.format("A total of %.2f has been deducted from your balance towards loan repayment. Remaining balance: %.2f", deduction, loan.getAmountOwed()));
+            }
         }
     }
 
@@ -92,14 +108,26 @@ public class LoanManager {
             return;
         }
 
-        // Calculate final loan amount after applying the fee
+        // Check the player's current balance to determine maximum loan amount
+        double currentBalance = economy.getBalance(player);
+        double maxLoanAmount = currentBalance * 2.5; // The maximum loan amount is 2.5 times the current balance
+
+        // Check if requested amount exceeds the maximum loan amount
+        if (requestedAmount > maxLoanAmount) {
+            player.sendMessage(String.format("Loan request denied. The maximum loan amount based on your current balance (%.2f) is %.2f.", currentBalance, maxLoanAmount));
+            return;
+        }
+
+        // Proceed with processing the loan request
         double finalLoanAmount = calculateLoanAmount(requestedAmount);
-        // Assume the player needs to receive the requested amount, and fee is extra
         boolean transactionSuccess = economy.depositPlayer(player, requestedAmount).transactionSuccess();
 
         if (transactionSuccess) {
             // Create and store a new loan instance
-            Loan loan = new Loan(finalLoanAmount, 0); // initial fee handled separately
+            //recentLoanTransactions.put(player.getUniqueId(), true);
+            // Schedule the removal of this flag after a short delay
+            //Bukkit.getScheduler().runTaskLater(plugin, () -> recentLoanTransactions.remove(player.getUniqueId()), 20L * 5); // 60 seconds delay
+            Loan loan = new Loan(finalLoanAmount, 0); // Adjust parameters as needed for your Loan class constructor
             activeLoans.put(playerId, loan);
             loanDataPersistence.saveLoan(playerId, loan); // Persist the new loan
             player.sendMessage(String.format("Loan for %.2f has been processed. Fee Applied: %.2f", requestedAmount, finalLoanAmount - requestedAmount));
@@ -116,5 +144,4 @@ public class LoanManager {
     public boolean hasActiveLoan(Player player) {
         return activeLoans.containsKey(player.getUniqueId());
     }
-    // Other methods like getLoanInfo, deductIncomePercentage for event handling, etc.
 }
