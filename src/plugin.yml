@@ -1,0 +1,23 @@
+name: LoanSystem
+version: 1.0
+main: me.swaggy.Main
+author: Swaggy
+description: A plugin to manage loans for players
+api-version: 1.18
+commands:
+  loan:
+    description: Access the loan system
+commands:
+  loan:
+    description: Manages player loans
+    usage: "/loan [accept|decline|info|pay]"
+
+permissions:
+  loansystem.use:
+    description: Allows use of all loan system commands
+    default: true
+  loansystem.admin:
+    description: Allows managing the loan system settings
+    default: op
+
+depend: [Vault]
